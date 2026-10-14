@@ -1,0 +1,35 @@
+name: Editor Input Audit Tests
+on:
+  push:
+    branches: [work/aple-editor-connection]
+    paths: ['scripts/audit-aple-input.py', 'scripts/run-editor-audit.command', 'Tests/InputAudit/**', '.github/workflows/editor-input-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: editor-input-audit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Input audit acceptance tests
+        run: |
+          set -o pipefail
+          mkdir -p build
+          python3 -m unittest discover -s Tests/InputAudit -v 2>&1 | tee build/input-audit-tests.log
+      - name: Existing Swift acceptance suite
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee build/host-baseline-swift.log
+      - name: Preserve test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-input-audit-test-evidence
+          path: |
+            build/input-audit-tests.log
+            build/host-baseline-swift.log
+          if-no-files-found: error
