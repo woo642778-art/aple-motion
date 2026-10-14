@@ -1,0 +1,47 @@
+name: Timing Core and iOS Frameworks
+on:
+  push:
+    branches: [main]
+    paths: ['Package.swift', 'Sources/**', 'Tests/**', 'scripts/**', '.github/workflows/timing.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: timing-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record toolchain
+        run: |
+          mkdir -p build/reports
+          swift --version | tee build/reports/toolchain.txt
+          xcodebuild -version | tee -a build/reports/toolchain.txt
+      - name: Core acceptance tests
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee build/reports/swift-test.log
+      - name: Compare pinned upstream scalar solver
+        run: python3 scripts/upstream-parity.py
+      - name: Build device and simulator frameworks
+        run: bash scripts/build-framework.sh
+      - name: Upload native modules and reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: ApleTiming-native-modules
+          path: |
+            build/ApleTimingCore.xcframework
+            build/ApleTimingUI.xcframework
+            build/reports
+            THIRD_PARTY_NOTICES.md
+          if-no-files-found: error
+      - name: Preserve failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: timing-failure-reports
+          path: build/reports
+          if-no-files-found: warn
