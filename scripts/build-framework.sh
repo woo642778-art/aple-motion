@@ -23,9 +23,11 @@ build_slice() {
     local sources=()
     while IFS= read -r source; do sources+=("$source"); done < <(find "Sources/$module" -name '*.swift' -type f | sort)
     if [[ ${#sources[@]} -eq 0 ]]; then echo "No source files for $module" >&2; exit 3; fi
-    local extra=()
+    # macOS /bin/bash 3.2 treats an empty array as unset under set -u.
+    # Foundation is required for every module, so keep this array nonempty.
+    local extra=(-framework Foundation)
     if [[ "$module" == ApleTimingUI ]]; then
-      extra=(-F "$base" -framework ApleTimingCore -framework UIKit -framework CoreGraphics)
+      extra+=(-F "$base" -framework ApleTimingCore -framework UIKit -framework CoreGraphics)
     fi
     echo "Building $module for $target"
     xcrun swiftc -swift-version 5 -O -emit-library -emit-module -enable-library-evolution \
@@ -33,7 +35,7 @@ build_slice() {
       -emit-module-path "$fw/Modules/${module}.swiftmodule/${module_target}.swiftmodule" \
       -emit-module-interface-path "$fw/Modules/${module}.swiftmodule/${module_target}.swiftinterface" \
       -Xlinker -install_name -Xlinker "@rpath/${module}.framework/${module}" \
-      -framework Foundation "${extra[@]}" "${sources[@]}" -o "$fw/$module"
+      "${extra[@]}" "${sources[@]}" -o "$fw/$module"
     python3 - "$fw/Info.plist" "$module" "$platform" <<'PY'
 import plistlib, sys
 path, module, platform = sys.argv[1:]
